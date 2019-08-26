@@ -1,4 +1,4 @@
-# FolderBackup
-Bash script for folder backup
+# DirBackup
+Bash script for directory backup
 
-Bash script for folder backup with exception handling.
+Bash script for directory backup with comprehensive exception handling.
