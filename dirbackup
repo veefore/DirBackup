@@ -1,0 +1,167 @@
+#dirbackup
+
+#Argument amount check
+case $# in
+[01]) echo "Not enough arguments ($#) passed to call the procedure
+./dirbackup <SOURCE> <DIST>
+is the appropriate way to call the procedure, where <SOURCE> is the source directory and <DEST> is the resultant directory represented by absolute addresses."
+exit 1 ;;
+2) ;;
+*) echo "Too many arguments ($#) passed to call the procedure
+./dirbackup <SOURCE> <DIST>
+is the appropriate way to call the procedure, where <SOURCE> is the source directory and <DEST> is the resultant directory represented by absolute addresses."
+exit 1 ;;
+esac
+
+#Remove slash at the end
+SOURCE=${1%/}
+DEST=${2%/}
+SOURCENAME=${SOURCE##*/}
+
+#Directories existence check
+if
+	[ ! -d "$SOURCE" ] && [ ! -d "$DEST" ]
+then
+	echo "Some of the directories passed as arguments don't exist.
+Check the exit code for details."
+	exit 4
+fi
+
+if
+	[ ! -d "$SOURCE" ]
+then
+	echo "Some of the directories passed as arguments don't exist.
+Check the exit code for details."
+	exit 2
+fi
+
+if
+	[ ! -d "$DEST" ]
+then
+	echo "Some of the directories passed as arguments don't exist.
+Check the exit code for details."
+	exit 3
+fi
+
+#Check if the source directory is empty
+if
+	[ -z "\`ls $SOURCE\`" ]
+then
+	echo 'Source directory is empty.'
+	exit 5
+fi
+
+#Check SOURCE and DEST directories access rights
+if
+	[ ! -r "$SOURCE" ] || [ ! -x "$SOURCE" ]
+then
+	echo "Access permission requirements (r-x) to $SOURCE directory are not met."
+	exit 6
+fi
+
+if
+	[ ! -w "$DEST" ] || [ ! -x "$DEST" ]
+then
+	echo "Access permission requirements (-wx) to $DEST directory are not met."
+	exit 7
+fi
+
+#Check SOURCE for underlying directories with insufficient access rights
+FLAG=false
+for X in `find $SOURCE -type d`
+do
+	echo "Cur X: $X"
+	DIR="$SOURCE/$X"
+	if 
+		[ -d "$DIR" ] && [ ! -r "$DIR" -o ! -x "$DIR" ]
+	then
+		echo "Acess permission requirements (r-x) tou $SOURCE underlying directory $X are not met.\n"
+		FLAG=true
+	fi
+done
+
+if
+	[ "$FLAG" == true ]
+then
+	exit 8
+fi
+
+#Function for iterating over each file
+iterate() {
+SRC=$1
+SRCNAME=${SRC##*/}
+DST=$2
+TODO=$3
+RET=0
+for X in `find $SRC -type f`
+do
+	DSTX=${X/$SRCNAME/$DST}
+	if
+		[ -f "$X" ] && [ -f "$DSTX" ]
+	then
+		$TODO "$X"
+		TMP=$?
+		if
+			[ $TMP -ne 0 ]
+		then
+			RET=$TMP
+		fi
+	fi
+done
+return $RET
+}
+
+#Check each file to be copied for required permissions
+##Function for checking if access permission requirements are met.
+checkRequirements() {
+FILE=$1
+if
+	[ ! -r "$FILE" ]
+then
+	echo "Access permission requirements (r--) to $FILE are not met."
+	return 9
+fi
+return 0
+}
+
+##Iteration itself
+iterate $SOURCE $DEST checkRequirements
+RET=$?
+if 
+	[ $RET -ne 0 ]
+then
+	exit $RET
+fi
+
+#Getting the name of DEST/SOURCE or DEST/SOURCE(n) so that it doesn't exist already.
+DIR="$DEST/$SOURCENAME"
+RET=0
+if
+	[ -d "$DIR" ]
+then
+	RET=11
+	NUM=1
+	while
+		[ -d "$DIR($NUM)" ]
+	do
+		let NUM=NUM+1
+	done
+	DIR="$DIR($NUM)"
+fi
+#Copying every file to be copied
+for X in `find $SOURCE -type f`
+do
+	DSTX=${X/$SOURCE/$DEST}
+	if
+		[ -f "$X" ] && [ -f "$DSTX" ]
+	then
+		TO=${X/$SOURCE/$DIR}
+		mkdir -p ${TO%/*}
+		cp "$X" "$TO"
+		echo "$X was successfully copied to ${X/$SOURCE/$DIR}"
+	fi
+done
+
+unset -f iterate
+unset -f checkRequirements
+exit $RET
